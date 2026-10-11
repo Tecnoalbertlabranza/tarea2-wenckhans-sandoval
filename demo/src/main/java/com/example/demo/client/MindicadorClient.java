@@ -17,20 +17,20 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.server.ResponseStatusException;
 
 @Component
-public class IndicadorClient {
+public class MindicadorClient {
     private static final DateTimeFormatter API_DATE = DateTimeFormatter.ofPattern("dd-MM-yyyy");
     private static final ZoneId CHILE = ZoneId.of("America/Santiago");
     private final RestClient client;
 
     @Autowired
-    public IndicadorClient(@Value("${indicadores.base-url}") String baseUrl) {
+    public MindicadorClient(@Value("${indicadores.base-url}") String baseUrl) {
         var factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(5000);
         factory.setReadTimeout(10000);
         this.client = RestClient.builder().baseUrl(baseUrl).requestFactory(factory).build();
     }
 
-    IndicadorClient(RestClient client) {
+    MindicadorClient(RestClient client) {
         this.client = client;
     }
 

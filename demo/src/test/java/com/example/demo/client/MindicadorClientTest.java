@@ -12,15 +12,15 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
 
-class IndicadorClientTest {
+class MindicadorClientTest {
     private MockRestServiceServer server;
-    private IndicadorClient client;
+    private MindicadorClient client;
 
     @BeforeEach
     void setup() {
         RestClient.Builder builder = RestClient.builder().baseUrl("https://indicadores.test/api");
         server = MockRestServiceServer.bindTo(builder).build();
-        client = new IndicadorClient(builder.build());
+        client = new MindicadorClient(builder.build());
     }
 
     @Test

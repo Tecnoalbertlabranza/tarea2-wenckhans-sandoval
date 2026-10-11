@@ -1,6 +1,6 @@
 package com.example.demo.service;
 
-import com.example.demo.client.IndicadorClient;
+import com.example.demo.client.MindicadorClient;
 import com.example.demo.dto.CompraDetalleDto;
 import com.example.demo.model.Compra;
 import com.example.demo.repository.CompraRepository;
@@ -13,9 +13,9 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class CompraService {
     private final CompraRepository compras;
-    private final IndicadorClient indicadores;
+    private final MindicadorClient indicadores;
 
-    public CompraService(CompraRepository compras, IndicadorClient indicadores) {
+    public CompraService(CompraRepository compras, MindicadorClient indicadores) {
         this.compras = compras;
         this.indicadores = indicadores;
     }

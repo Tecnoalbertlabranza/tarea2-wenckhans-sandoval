@@ -1,6 +1,6 @@
 package com.example.demo.controller;
 
-import com.example.demo.client.IndicadorClient;
+import com.example.demo.client.MindicadorClient;
 import com.example.demo.exception.ApiExceptionHandler;
 import com.example.demo.repository.CompraRepository;
 import com.example.demo.service.CompraService;
@@ -23,14 +23,14 @@ class CompraControllerTest {
         @TempDir
         Path temp;
         private MockMvc mvc;
-        private IndicadorClient indicadores;
+        private MindicadorClient indicadores;
 
         @BeforeEach
         void setup() throws Exception {
                 Path csv = temp.resolve("compras.csv");
                 Files.writeString(csv, "id,producto,monto,unidad,fecha\n"
                                 + "3,Escritorio,8,UF,2026-09-04\n2,Monitor,180,USD,2026-09-02\n");
-                indicadores = mock(IndicadorClient.class);
+                indicadores = mock(MindicadorClient.class);
                 CompraService service = new CompraService(new CompraRepository(csv.toString()), indicadores);
                 mvc = MockMvcBuilders.standaloneSetup(new CompraController(service))
                                 .setControllerAdvice(new ApiExceptionHandler()).build();
