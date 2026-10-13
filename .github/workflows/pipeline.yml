@@ -1,0 +1,108 @@
+name: Pipeline de compras
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@v4
+      - name: Configurar Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: demo/pom.xml
+      - name: Ejecutar pruebas
+        working-directory: demo
+        run: sh ./mvnw --batch-mode --no-transfer-progress test
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@v4
+      - name: Configurar Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: demo/pom.xml
+      - name: Generar JAR
+        working-directory: demo
+        run: sh ./mvnw --batch-mode --no-transfer-progress -DskipTests package
+      - name: Guardar JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-jar
+          path: demo/target/*.jar
+          if-no-files-found: error
+          retention-days: 7
+      - name: Construir imagen Docker
+        env:
+          SOURCE_URL: https://github.com/${{ github.repository }}
+        run: |
+          docker build --file Dockerfile --tag compras:ci \
+            --label "org.opencontainers.image.source=$SOURCE_URL" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" .
+          docker save compras:ci | gzip > "$RUNNER_TEMP/compras-image.tar.gz"
+      # Los jobs usan máquinas distintas: publish recibe la imagen ya construida.
+      - name: Guardar imagen para publish
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: ${{ runner.temp }}/compras-image.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+
+  publish:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Descargar imagen construida
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: ${{ runner.temp }}
+      - name: Autenticarse en GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publicar latest y SHA corto
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          IMAGE="ghcr.io/${REPOSITORY,,}"
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          docker load --input "$RUNNER_TEMP/compras-image.tar.gz"
+          docker tag compras:ci "$IMAGE:$SHORT_SHA"
+          docker tag compras:ci "$IMAGE:latest"
+          docker push "$IMAGE:$SHORT_SHA"
+          docker push "$IMAGE:latest"
+          echo "Imagen publicada: $IMAGE:$SHORT_SHA y $IMAGE:latest" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Comprueba la visibilidad Public del paquete en GHCR (ver README).' >> "$GITHUB_STEP_SUMMARY"
