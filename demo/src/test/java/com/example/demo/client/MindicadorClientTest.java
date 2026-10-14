@@ -74,6 +74,29 @@ class MindicadorClientTest {
         assertBadGateway();
     }
 
+    @Test
+    void identifiesGatewayResponseFromProvider() {
+        server.expect(requestTo("https://indicadores.test/api/uf/04-09-2026"))
+                .andRespond(withStatus(org.springframework.http.HttpStatus.BAD_GATEWAY)
+                        .contentType(MediaType.TEXT_HTML).body("<html>502 Bad Gateway nginx</html>"));
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class,
+                () -> client.obtenerValor("UF", LocalDate.of(2026, 9, 4)));
+        assertEquals(502, failure.getStatusCode().value());
+        assertTrue(failure.getReason().contains("Mindicador respondió HTTP 502"));
+        server.verify();
+    }
+
+    @Test
+    void identifiesConnectionTimeout() {
+        server.expect(requestTo("https://indicadores.test/api/uf/04-09-2026"))
+                .andRespond(withException(new java.net.SocketTimeoutException("Read timed out")));
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class,
+                () -> client.obtenerValor("UF", LocalDate.of(2026, 9, 4)));
+        assertEquals(502, failure.getStatusCode().value());
+        assertTrue(failure.getReason().contains("No se pudo conectar con mindicador.cl"));
+        server.verify();
+    }
+
     private void assertBadGateway() {
         assertEquals(502, assertThrows(ResponseStatusException.class,
                 () -> client.obtenerValor("UF", LocalDate.of(2026, 9, 4))).getStatusCode().value());

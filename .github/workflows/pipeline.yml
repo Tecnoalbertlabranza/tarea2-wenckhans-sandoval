@@ -62,8 +62,12 @@ jobs:
           docker build --file Dockerfile --tag compras:ci \
             --label "org.opencontainers.image.source=$SOURCE_URL" \
             --label "org.opencontainers.image.revision=$GITHUB_SHA" .
+          IMAGE_SIZE=$(docker image inspect compras:ci --format '{{.Size}}')
+          if [ "$IMAGE_SIZE" -ge 250000000 ]; then
+            echo "La imagen supera el límite: $IMAGE_SIZE bytes (debe ser menor a 250 MB)." >&2
+            exit 1
+          fi
           docker save compras:ci | gzip > "$RUNNER_TEMP/compras-image.tar.gz"
-      # Los jobs usan máquinas distintas: publish recibe la imagen ya construida.
       - name: Guardar imagen para publish
         uses: actions/upload-artifact@v4
         with:

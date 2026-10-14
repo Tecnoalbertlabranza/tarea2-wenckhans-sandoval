@@ -1,10 +1,12 @@
 package com.example.demo.dto;
 
+import java.math.BigDecimal;
+
 public record CompraDto(
-        int id, 
-        String producto, 
-        double monto, 
-        String fecha, 
-        double valor_unidad, 
-        int monto_pesos
+        long id,
+        String producto,
+        BigDecimal monto,
+        String fecha,
+        BigDecimal valor_unidad,
+        long monto_pesos
 ) {}

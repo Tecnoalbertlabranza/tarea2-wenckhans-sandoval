@@ -13,6 +13,28 @@ class CompraRepositoryTest {
     private static final String HEADER = "id,producto,monto,unidad,fecha\n";
 
     @Test
+    void resolvesCsvFromRootAndDemo() throws Exception {
+        Path csv = temp.resolve("compras.csv");
+        Path demo = Files.createDirectory(temp.resolve("demo"));
+        Files.writeString(csv, HEADER + "3,Escritorio,8,UF,2026-09-04\n");
+        for (Path directory : java.util.List.of(temp, demo)) {
+            CompraRepository repository = new CompraRepository("compras.csv", directory);
+            assertEquals(csv, repository.getCsvPath());
+            assertEquals("Escritorio", repository.findById(3).orElseThrow().producto());
+        }
+    }
+
+    @Test
+    void preservesExplicitCsvPathEvenWhenMissing() throws Exception {
+        Path demo = Files.createDirectory(temp.resolve("demo"));
+        Files.writeString(temp.resolve("compras.csv"), HEADER);
+        Path configured = demo.resolve("external.csv");
+        CompraRepository repository = new CompraRepository(configured.toString(), demo);
+        assertEquals(configured, repository.getCsvPath());
+        assertThrows(ResponseStatusException.class, () -> repository.findById(3));
+    }
+
+    @Test
     void findsByIdRegardlessOfPositionAndReloadsExternalFile() throws Exception {
         Path csv = temp.resolve("compras.csv");
         Files.writeString(csv, HEADER + "8,SSD,120.5,USD,2026-09-22\n3,Escritorio,8,UF,2026-09-04\n");

@@ -62,10 +62,61 @@ class CompraControllerTest {
         }
 
         @Test
+        void ufListUsesRepositoryCsvPath() throws Exception {
+                when(indicadores.obtenerValor("UF", LocalDate.of(2026, 9, 4)))
+                                .thenReturn(new BigDecimal("40000"));
+                mvc.perform(get("/compras/uf")).andExpect(status().isOk())
+                                .andExpect(jsonPath("$.compras.length()").value(1))
+                                .andExpect(jsonPath("$.compras[0].id").value(3))
+                                .andExpect(jsonPath("$.total_pesos").value(320000));
+        }
+
+        @Test
+        void dollarListUsesRepositoryCsvPath() throws Exception {
+                when(indicadores.obtenerValor("USD", LocalDate.of(2026, 9, 2)))
+                                .thenReturn(new BigDecimal("1000"));
+                mvc.perform(get("/compras/dolar")).andExpect(status().isOk())
+                                .andExpect(jsonPath("$.compras.length()").value(1))
+                                .andExpect(jsonPath("$.compras[0].id").value(2))
+                                .andExpect(jsonPath("$.total_pesos").value(180000));
+        }
+
+        @Test
         void returns404WithoutConsultingProviderForUnknownPurchase() throws Exception {
                 mvc.perform(get("/compras/detalle/999")).andExpect(status().isNotFound())
                                 .andExpect(jsonPath("$.error").value("No existe una compra con id 999."));
                 verifyNoInteractions(indicadores);
+        }
+
+        @Test
+        void listPreservesProviderFailure() throws Exception {
+                when(indicadores.obtenerValor("UF", LocalDate.of(2026, 9, 4)))
+                                .thenThrow(new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Mindicador no disponible."));
+                mvc.perform(get("/compras/uf")).andExpect(status().isBadGateway())
+                                .andExpect(jsonPath("$.error").value("Mindicador no disponible."));
+        }
+
+        @Test
+        void listRejectsInvalidCsvBeforeCallingProvider() throws Exception {
+                Files.writeString(temp.resolve("compras.csv"), "encabezado incorrecto\n");
+                mvc.perform(get("/compras/uf")).andExpect(status().isInternalServerError())
+                                .andExpect(jsonPath("$.error").value(
+                                                "No se pudo leer el archivo de compras. Revise CSV_PATH y el formato del CSV."));
+                verifyNoInteractions(indicadores);
+        }
+
+        @Test
+        void listPreservesOrderAndSumsRoundedLongAmounts() throws Exception {
+                Files.writeString(temp.resolve("compras.csv"), "id,producto,monto,unidad,fecha\n"
+                                + "9,Primero,60000.0000125,UF,2026-09-04\n"
+                                + "3,Segundo,8,UF,2026-09-04\n");
+                when(indicadores.obtenerValor("UF", LocalDate.of(2026, 9, 4)))
+                                .thenReturn(new BigDecimal("40000"));
+                mvc.perform(get("/compras/uf")).andExpect(status().isOk())
+                                .andExpect(jsonPath("$.compras[0].id").value(9))
+                                .andExpect(jsonPath("$.compras[1].id").value(3))
+                                .andExpect(jsonPath("$.compras[0].monto_pesos").value(2400000001L))
+                                .andExpect(jsonPath("$.total_pesos").value(2400320001L));
         }
 
         @Test

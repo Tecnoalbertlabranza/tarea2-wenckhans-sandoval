@@ -10,7 +10,10 @@ import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Optional;
+import java.util.List;
+import java.util.ArrayList;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Repository;
 import org.springframework.web.server.ResponseStatusException;
@@ -19,11 +22,32 @@ import org.springframework.web.server.ResponseStatusException;
 public class CompraRepository {
     private final Path csvPath;
 
+    @Autowired
     public CompraRepository(@Value("${compras.csv-path}") String csvPath) {
-        this.csvPath = Path.of(csvPath);
+        this(csvPath, Path.of("").toAbsolutePath());
+    }
+
+    CompraRepository(String configuredPath, Path workingDirectory) {
+        Path configured = Path.of(configuredPath);
+        Path resolved = workingDirectory.resolve(configured).toAbsolutePath().normalize();
+        if (configured.equals(Path.of("compras.csv")) && !Files.isRegularFile(resolved)) {
+            Path parentCsv = workingDirectory.resolve("../compras.csv").toAbsolutePath().normalize();
+            if (Files.isRegularFile(parentCsv)) {
+                resolved = parentCsv;
+            }
+        }
+        this.csvPath = resolved;
+    }
+
+    public Path getCsvPath() {
+        return csvPath;
     }
 
     public Optional<Compra> findById(long id) {
+        return findAll().stream().filter(compra -> compra.id() == id).findFirst();
+    }
+
+    public List<Compra> findAll() {
         try {
             var lines = Files.readAllLines(csvPath, StandardCharsets.UTF_8);
             if (lines.isEmpty() || !lines.getFirst().replace("\uFEFF", "").trim()
@@ -31,7 +55,7 @@ public class CompraRepository {
                 throw new IllegalArgumentException("Encabezado CSV incorrecto");
             }
             var ids = new HashSet<Long>();
-            Compra encontrada = null;
+            List<Compra> compras = new ArrayList<>();
             for (int i = 1; i < lines.size(); i++) {
                 if (lines.get(i).isBlank()) {
                     continue;
@@ -49,11 +73,9 @@ public class CompraRepository {
                         || !(unidad.equals("UF") || unidad.equals("USD"))) {
                     throw new IllegalArgumentException("Datos de compra incorrectos");
                 }
-                if (compraId == id) {
-                    encontrada = new Compra(compraId, producto, monto, unidad, fecha);
-                }
+                compras.add(new Compra(compraId, producto, monto, unidad, fecha));
             }
-            return Optional.ofNullable(encontrada);
+            return List.copyOf(compras);
         } catch (IOException | IllegalArgumentException | DateTimeException ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "No se pudo leer el archivo de compras. Revise CSV_PATH y el formato del CSV.", ex);

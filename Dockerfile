@@ -21,4 +21,4 @@ USER appuser
 
 EXPOSE ${APP_PORT}
 
-ENTRYPOINT ["sh", "-c", "java -jar app.jar --server.port=${APP_PORT}"]
+ENTRYPOINT ["sh", "-c", "exec java -jar app.jar --server.port=${APP_PORT}"]

@@ -1,12 +1,10 @@
 package com.example.demo.service;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -24,7 +22,6 @@ public class CompraService {
 
     private final CompraRepository compras;
     private final MindicadorClient indicadores;
-    private final String csvPath = System.getenv("CSV_PATH") != null ? System.getenv("CSV_PATH") : "compras.csv";
 
     public CompraService(CompraRepository compras, MindicadorClient indicadores) {
         this.compras = compras;
@@ -32,7 +29,7 @@ public class CompraService {
     }
 
     public UnidadResponseDto obtenerComprasPorUnidad(String unidadSolicitada) {
-        String unidadNormalizada = unidadSolicitada.toUpperCase();
+        String unidadNormalizada = unidadSolicitada.toUpperCase(Locale.ROOT);
         if (unidadNormalizada.equals("DOLAR")) {
             unidadNormalizada = "USD";
         }
@@ -42,38 +39,20 @@ public class CompraService {
         }
 
         List<CompraDto> listaCompras = new ArrayList<>();
-        int totalPesos = 0;
-
-        try (BufferedReader br = new BufferedReader(new FileReader(csvPath))) {
-            String linea;
-            boolean primeraLinea = true;
-
-            while ((linea = br.readLine()) != null) {
-                if (primeraLinea) {
-                    primeraLinea = false;
-                    continue;
-                }
-
-                String[] columnas = linea.split(",");
-                if (columnas.length == 5 && columnas[3].trim().equalsIgnoreCase(unidadNormalizada)) {
-                    
-                    int id = Integer.parseInt(columnas[0].trim());
-                    String producto = columnas[1].trim();
-                    double monto = Double.parseDouble(columnas[2].trim());
-                    String fechaCsv = columnas[4].trim();
-                    LocalDate fecha = LocalDate.parse(fechaCsv);
-
-                    BigDecimal valorBd = indicadores.obtenerValor(unidadNormalizada, fecha);
-                    double valorUnidad = valorBd.doubleValue();
-                    
-                    int montoPesos = (int) Math.round(monto * valorUnidad);
-
-                    listaCompras.add(new CompraDto(id, producto, monto, fechaCsv, valorUnidad, montoPesos));
-                    totalPesos += montoPesos;
-                }
+        long totalPesos = 0;
+        for (Compra compra : compras.findAll()) {
+            if (!unidadNormalizada.equals(compra.unidad())) {
+                continue;
             }
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error al leer el archivo CSV: " + e.getMessage());
+            CompraDetalleDto detalle = convertir(compra);
+            listaCompras.add(new CompraDto(detalle.id(), detalle.producto(), detalle.monto(),
+                    detalle.fecha().toString(), detalle.valorUnidad(), detalle.montoPesos()));
+            try {
+                totalPesos = Math.addExact(totalPesos, detalle.montoPesos());
+            } catch (ArithmeticException ex) {
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "El total excede el rango admitido.", ex);
+            }
         }
 
         return new UnidadResponseDto(unidadNormalizada, listaCompras, totalPesos);
@@ -85,6 +64,10 @@ public class CompraService {
         }
         Compra compra = compras.findById(id).orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "No existe una compra con id " + id + "."));
+        return convertir(compra);
+    }
+
+    private CompraDetalleDto convertir(Compra compra) {
         BigDecimal valor = indicadores.obtenerValor(compra.unidad(), compra.fecha());
         long pesos;
         try {
